@@ -25,18 +25,15 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 POLL_INTERVAL = 15
 
-# ── Button Labels (Khmer) ──────────────────────────────────────────────────────
-BTN_NEW_EMAIL  = "📧 អ៊ីម៉ែលថ្មី"
-BTN_MY_EMAIL   = "📋 អ៊ីម៉ែលរបស់ខ្ញុំ"
-BTN_INBOX      = "📥 ពិនិត្យប្រអប់"
-BTN_DELETE     = "🗑 លុបអ៊ីម៉ែល"
-BTN_STATS      = "📊 ស្ថិតិ"
+# ── Button Labels ──────────────────────────────────────────────────────────────
+BTN_NEW_EMAIL  = "✉️ New address"
+BTN_MY_EMAIL   = "📓 List"
+BTN_DELETE     = "🗑️ Delete"
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
     [
-        [KeyboardButton(BTN_NEW_EMAIL),  KeyboardButton(BTN_MY_EMAIL)],
-        [KeyboardButton(BTN_INBOX),      KeyboardButton(BTN_DELETE)],
-        [KeyboardButton(BTN_STATS)],
+        [KeyboardButton(BTN_NEW_EMAIL), KeyboardButton(BTN_MY_EMAIL)],
+        [KeyboardButton(BTN_DELETE)],
     ],
     resize_keyboard=True,
     is_persistent=True,
@@ -425,11 +422,9 @@ def main():
 
     app.add_handler(CommandHandler("start", send_welcome))
 
-    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_NEW_EMAIL}$"),  handle_new_email))
-    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_MY_EMAIL}$"),   handle_my_email))
-    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_INBOX}$"),      handle_inbox))
-    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_DELETE}$"),     handle_delete))
-    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_STATS}$"),      handle_stats))
+    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_NEW_EMAIL}$"), handle_new_email))
+    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_MY_EMAIL}$"),  handle_inbox))
+    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_DELETE}$"),    handle_delete))
 
     app.add_handler(CallbackQueryHandler(button_callback))
 
