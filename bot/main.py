@@ -22,8 +22,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+BOT_TOKEN    = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 POLL_INTERVAL = 15
+
+ADMIN_ID    = 5002402843
+GROUP_ID    = -1003714200468
+ALLOWED     = filters.Chat(chat_id=[ADMIN_ID, GROUP_ID])
 
 # ── Button Labels ──────────────────────────────────────────────────────────────
 BTN_NEW_EMAIL  = "✉️ New address"
@@ -250,8 +254,11 @@ async def _show_inbox(user_id: int, reply_to=None, callback_query=None):
 # ── Inline button callbacks ───────────────────────────────────────────────────
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    user  = query.from_user
+    if user.id != ADMIN_ID and update.effective_chat.id != GROUP_ID:
+        await query.answer("⛔ អ្នកមិនមានសិទ្ធិប្រើ bot នេះទេ។", show_alert=True)
+        return
     await query.answer()
-    user = query.from_user
 
     if query.data == "check_inbox":
         await _show_inbox(user.id, callback_query=query)
@@ -417,11 +424,11 @@ def main():
 
     app = Application.builder().token(BOT_TOKEN).build()
 
-    app.add_handler(CommandHandler("start", send_welcome))
+    app.add_handler(CommandHandler("start", send_welcome, filters=ALLOWED))
 
-    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_NEW_EMAIL}$"), handle_new_email))
-    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_MY_EMAIL}$"),  handle_inbox))
-    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_DELETE}$"),    handle_delete))
+    app.add_handler(MessageHandler(ALLOWED & filters.Regex(f"^{BTN_NEW_EMAIL}$"), handle_new_email))
+    app.add_handler(MessageHandler(ALLOWED & filters.Regex(f"^{BTN_MY_EMAIL}$"),  handle_inbox))
+    app.add_handler(MessageHandler(ALLOWED & filters.Regex(f"^{BTN_DELETE}$"),    handle_delete))
 
     app.add_handler(CallbackQueryHandler(button_callback))
 
