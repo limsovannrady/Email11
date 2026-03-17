@@ -1,12 +1,9 @@
 [project]
-name = "python-template"
+name = "tempmail-bot"
 version = "0.1.0"
-description = ""
-authors = ["Your Name <you@example.com>"]
+description = "Telegram TempMail Bot"
 requires-python = ">=3.11"
 dependencies = [
-    "psycopg2-binary>=2.9.11",
-    "python-dotenv>=1.2.2",
     "python-telegram-bot[job-queue]>=22.7",
     "requests>=2.32.5",
 ]
