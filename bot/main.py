@@ -33,7 +33,6 @@ BTN_DELETE     = "🗑️ Delete"
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
     [
         [KeyboardButton(BTN_NEW_EMAIL), KeyboardButton(BTN_MY_EMAIL)],
-        [KeyboardButton(BTN_DELETE)],
     ],
     resize_keyboard=True,
     is_persistent=True,
