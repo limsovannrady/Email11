@@ -123,22 +123,20 @@ async def handle_my_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# ── 📓 List — show all email addresses the user has ever created ──────────────
+# ── 📓 List — show only currently active (usable) email ──────────────────────
 async def handle_inbox(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    history = get_email_history(user.id)
+    user    = update.effective_user
+    session = get_session(user.id)
 
-    if not history:
+    if not session or not session.get("is_active") or not session.get("email_address"):
         await update.message.reply_text(
-            "📭 អ្នកមិនទាន់មានអ៊ីម៉ែលណាទេ។\n\nចុច ✉️ New address ដើម្បីបង្កើត។",
+            "📭 គ្មាន email សកម្មទេ។\n\nចុច ✉️ New address ដើម្បីបង្កើត។",
             reply_markup=MAIN_KEYBOARD
         )
         return
 
-    lines = "\n".join(history)
     await update.message.reply_text(
-        f"📓 <b>អ៊ីម៉ែលទាំងអស់ ({len(history)}):</b>\n\n{lines}",
-        parse_mode="HTML",
+        session["email_address"],
         reply_markup=MAIN_KEYBOARD
     )
 
