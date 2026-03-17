@@ -13,6 +13,7 @@ from db import (
     init_db, upsert_session, get_session, get_all_active_sessions,
     update_last_mail_id, update_session_after_restore, deactivate_session,
     log_mail, get_stats, add_email_to_history, get_email_history,
+    get_all_history_entries, update_history_session, update_history_last_mail_id,
 )
 import dropmail
 
@@ -94,7 +95,10 @@ async def handle_new_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
         address_id=result["address_id"],
         restore_key=result["restore_key"],
     )
-    add_email_to_history(user.id, result["email"])
+    add_email_to_history(user.id, result["email"],
+                         dropmail_session_id=result["session_id"],
+                         address_id=result["address_id"],
+                         restore_key=result["restore_key"])
 
     await update.message.reply_text(result['email'])
 
@@ -279,7 +283,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             address_id=result["address_id"],
             restore_key=result["restore_key"],
         )
-        add_email_to_history(user.id, result["email"])
+        add_email_to_history(user.id, result["email"],
+                             dropmail_session_id=result["session_id"],
+                             address_id=result["address_id"],
+                             restore_key=result["restore_key"])
         await query.edit_message_text(result["email"])
 
     elif query.data == "delete_email":
@@ -295,78 +302,53 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
-# ── Background email polling ──────────────────────────────────────────────────
+# ── Background email polling — keeps EVERY history email alive ────────────────
 async def poll_emails(context: ContextTypes.DEFAULT_TYPE):
-    sessions = get_all_active_sessions()
-    for session in sessions:
-        user_id       = session["telegram_user_id"]
-        session_id    = session["dropmail_session_id"]
-        last_mail_id  = session.get("last_mail_id")
-        email_address = session.get("email_address", "")
-        restore_key   = session.get("restore_key")
+    entries = get_all_history_entries()
+
+    for entry in entries:
+        history_id    = entry["id"]
+        user_id       = entry["telegram_user_id"]
+        session_id    = entry["dropmail_session_id"]
+        email_address = entry["email_address"]
+        restore_key   = entry["restore_key"]
+        last_mail_id  = entry.get("last_mail_id")
+
+        if not session_id:
+            continue
 
         try:
             mails = dropmail.get_new_mails(session_id, after_mail_id=last_mail_id)
         except Exception as e:
-            logger.warning(f"Poll error for user {user_id}: {e}")
+            logger.warning(f"Poll error [{email_address}]: {e}")
             continue
 
-        # ── Auto-restore if session expired ──────────────────────────────────
+        # ── Auto-restore silently when session expires ────────────────────────
         if mails is None:
-            if not restore_key or not email_address:
-                deactivate_session(user_id)
-                try:
-                    await context.bot.send_message(
-                        chat_id=user_id,
-                        text=(
-                            "⚠️ <b>Session ផុតកំណត់ ហើយមិនអាចស្តារបានទេ។</b>\n\n"
-                            "ចុច <b>📧 អ៊ីម៉ែលថ្មី</b> ដើម្បីបង្កើតថ្មី។"
-                        ),
-                        parse_mode="HTML"
-                    )
-                except Exception:
-                    pass
-                continue
-
-            logger.info(f"Session expired for user {user_id}, auto-restoring...")
+            logger.info(f"Restoring [{email_address}] for user {user_id}...")
             try:
                 restored = dropmail.restore_session(email_address, restore_key)
             except Exception as e:
-                logger.warning(f"Restore failed for user {user_id}: {e}")
-                restored = None
+                logger.warning(f"Restore failed [{email_address}]: {e}")
+                continue
 
             if restored:
-                update_session_after_restore(
-                    telegram_user_id=user_id,
+                update_history_session(
+                    history_id,
                     new_session_id=restored["session_id"],
                     new_address_id=restored.get("address_id"),
                     new_restore_key=restored.get("restore_key"),
                 )
-                logger.info(f"Restored session for user {user_id}: {restored['session_id']}")
-                try:
-                    await context.bot.send_message(
-                        chat_id=user_id,
-                        text=(
-                            f"🔄 <b>Session ត្រូវបានស្តារឡើងវិញដោយស្វ័យប្រវត្តិ!</b>\n\n"
-                            f"📧 អ៊ីម៉ែលរបស់អ្នកនៅដដែល: <code>{email_address}</code>"
-                        ),
-                        parse_mode="HTML"
+                # Also sync bot_sessions if this is the user's current email
+                cur_sess = get_session(user_id)
+                if cur_sess and cur_sess.get("email_address") == email_address:
+                    update_session_after_restore(
+                        telegram_user_id=user_id,
+                        new_session_id=restored["session_id"],
+                        new_address_id=restored.get("address_id"),
+                        new_restore_key=restored.get("restore_key"),
                     )
-                except Exception:
-                    pass
-            else:
-                deactivate_session(user_id)
-                try:
-                    await context.bot.send_message(
-                        chat_id=user_id,
-                        text=(
-                            "❌ <b>ស្តារ session មិនបានទេ។</b>\n\n"
-                            "ចុច <b>📧 អ៊ីម៉ែលថ្មី</b> ដើម្បីបង្កើតថ្មី។"
-                        ),
-                        parse_mode="HTML"
-                    )
-                except Exception:
-                    pass
+                logger.info(f"Restored [{email_address}] → new session {restored['session_id']}")
             continue
 
         # ── Forward new emails ────────────────────────────────────────────────
@@ -407,7 +389,7 @@ async def poll_emails(context: ContextTypes.DEFAULT_TYPE):
             newest_id = mail_id
 
         if newest_id:
-            update_last_mail_id(user_id, newest_id)
+            update_history_last_mail_id(history_id, newest_id)
 
 
 # ── Bot entry point ───────────────────────────────────────────────────────────

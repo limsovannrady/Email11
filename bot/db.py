@@ -29,11 +29,7 @@ def init_db():
             updated_at          TIMESTAMP DEFAULT NOW()
         )
     """)
-    # Add new columns to existing table if they don't exist yet
-    for col, col_def in [
-        ("address_id",  "TEXT"),
-        ("restore_key", "TEXT"),
-    ]:
+    for col, col_def in [("address_id", "TEXT"), ("restore_key", "TEXT")]:
         cur.execute(f"""
             DO $$ BEGIN
                 ALTER TABLE bot_sessions ADD COLUMN {col} {col_def};
@@ -52,32 +48,59 @@ def init_db():
             received_at      TIMESTAMP DEFAULT NOW()
         )
     """)
+
+    # email_history: every created email with its own live session info
     cur.execute("""
         CREATE TABLE IF NOT EXISTS email_history (
-            id               SERIAL PRIMARY KEY,
-            telegram_user_id BIGINT NOT NULL,
-            email_address    TEXT NOT NULL,
-            created_at       TIMESTAMP DEFAULT NOW()
+            id                  SERIAL PRIMARY KEY,
+            telegram_user_id    BIGINT NOT NULL,
+            email_address       TEXT NOT NULL,
+            dropmail_session_id TEXT,
+            address_id          TEXT,
+            restore_key         TEXT,
+            last_mail_id        TEXT,
+            created_at          TIMESTAMP DEFAULT NOW()
         )
     """)
+    # Add new columns to existing email_history rows if upgrading
+    for col, col_def in [
+        ("dropmail_session_id", "TEXT"),
+        ("address_id",          "TEXT"),
+        ("restore_key",         "TEXT"),
+        ("last_mail_id",        "TEXT"),
+    ]:
+        cur.execute(f"""
+            DO $$ BEGIN
+                ALTER TABLE email_history ADD COLUMN {col} {col_def};
+            EXCEPTION WHEN duplicate_column THEN NULL;
+            END $$;
+        """)
+
     conn.commit()
     cur.close()
     conn.close()
 
 
-def add_email_to_history(telegram_user_id: int, email_address: str):
+# ── email_history CRUD ────────────────────────────────────────────────────────
+
+def add_email_to_history(telegram_user_id: int, email_address: str,
+                         dropmail_session_id: Optional[str] = None,
+                         address_id: Optional[str] = None,
+                         restore_key: Optional[str] = None):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO email_history (telegram_user_id, email_address)
-        VALUES (%s, %s)
-    """, (telegram_user_id, email_address))
+        INSERT INTO email_history
+            (telegram_user_id, email_address, dropmail_session_id, address_id, restore_key)
+        VALUES (%s, %s, %s, %s, %s)
+    """, (telegram_user_id, email_address, dropmail_session_id, address_id, restore_key))
     conn.commit()
     cur.close()
     conn.close()
 
 
 def get_email_history(telegram_user_id: int) -> list:
+    """Return list of email addresses (newest first)."""
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("""
@@ -90,6 +113,54 @@ def get_email_history(telegram_user_id: int) -> list:
     conn.close()
     return [r[0] for r in rows]
 
+
+def get_all_history_entries() -> list:
+    """Return all history rows that have a restore_key (can be kept alive)."""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("""
+        SELECT * FROM email_history
+        WHERE restore_key IS NOT NULL
+        ORDER BY id
+    """)
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def update_history_session(history_id: int, new_session_id: str,
+                           new_address_id: Optional[str],
+                           new_restore_key: Optional[str]):
+    """Update session info for a history entry after restore."""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("""
+        UPDATE email_history SET
+            dropmail_session_id = %s,
+            address_id          = %s,
+            restore_key         = %s,
+            last_mail_id        = NULL
+        WHERE id = %s
+    """, (new_session_id, new_address_id, new_restore_key, history_id))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def update_history_last_mail_id(history_id: int, mail_id: str):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE email_history SET last_mail_id = %s WHERE id = %s",
+        (mail_id, history_id)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+# ── bot_sessions CRUD ─────────────────────────────────────────────────────────
 
 def upsert_session(telegram_user_id: int, telegram_username: Optional[str],
                    telegram_first_name: Optional[str],
@@ -125,7 +196,6 @@ def update_session_after_restore(telegram_user_id: int,
                                  new_session_id: str,
                                  new_address_id: Optional[str],
                                  new_restore_key: Optional[str]):
-    """Update session ID + keys after auto-restore, keep email address."""
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("""
