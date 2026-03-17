@@ -92,7 +92,7 @@ async def handle_new_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     add_email_to_history(user.id, result["email"])
 
-    await update.message.reply_text(result['email'], reply_markup=email_inline_kb())
+    await update.message.reply_text(result['email'])
 
 
 # ── 📋 My Email ───────────────────────────────────────────────────────────────
@@ -275,7 +275,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             restore_key=result["restore_key"],
         )
         add_email_to_history(user.id, result["email"])
-        await query.edit_message_text(result["email"], reply_markup=email_inline_kb())
+        await query.edit_message_text(result["email"])
 
     elif query.data == "delete_email":
         session = get_session(user.id)
