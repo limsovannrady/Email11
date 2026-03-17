@@ -68,22 +68,18 @@ async def send_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ── 📧 New Email ──────────────────────────────────────────────────────────────
 async def handle_new_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    msg = await update.message.reply_text(
-        "⏳ កំពុងបង្កើតអ៊ីម៉ែលបណ្តោះអាសន្ន...",
-        reply_markup=MAIN_KEYBOARD
-    )
-    await _create_new_email(user, msg)
 
-
-async def _create_new_email(user, msg):
     try:
         result = dropmail.create_session()
     except Exception as e:
-        await msg.edit_text(f"❌ បង្កើតមិនបានទេ: {e}")
+        await update.message.reply_text(f"❌ បង្កើតមិនបានទេ: {e}", reply_markup=MAIN_KEYBOARD)
         return
 
     if not result:
-        await msg.edit_text("❌ មិនអាចបង្កើត session បានទេ។ សូមព្យាយាមម្ដងទៀត។")
+        await update.message.reply_text(
+            "❌ មិនអាចបង្កើត session បានទេ។ សូមព្យាយាមម្ដងទៀត។",
+            reply_markup=MAIN_KEYBOARD
+        )
         return
 
     upsert_session(
@@ -103,7 +99,7 @@ async def _create_new_email(user, msg):
         f"📬 ខ្ញុំនឹងបញ្ជូនអ៊ីម៉ែលចូលមកជូនអ្នកភ្លាមៗ។\n"
         f"🔄 <i>ស្តារឡើងវិញដោយស្វ័យប្រវត្តិបើ session ផុតកំណត់។</i>"
     )
-    await msg.edit_text(text, parse_mode="HTML", reply_markup=email_inline_kb())
+    await update.message.reply_text(text, parse_mode="HTML", reply_markup=email_inline_kb())
 
 
 # ── 📋 My Email ───────────────────────────────────────────────────────────────
@@ -254,7 +250,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _show_inbox(user.id, callback_query=query)
 
     elif query.data == "new_email":
-        await query.edit_message_text("⏳ កំពុងបង្កើតអ៊ីម៉ែលបណ្តោះអាសន្ន...")
         try:
             result = dropmail.create_session()
         except Exception as e:
