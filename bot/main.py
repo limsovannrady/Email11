@@ -12,7 +12,7 @@ from telegram.ext import (
 from db import (
     init_db, upsert_session, get_session, get_all_active_sessions,
     update_last_mail_id, update_session_after_restore, deactivate_session,
-    log_mail, get_stats,
+    log_mail, get_stats, add_email_to_history, get_email_history,
 )
 import dropmail
 
@@ -91,6 +91,7 @@ async def handle_new_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
         address_id=result["address_id"],
         restore_key=result["restore_key"],
     )
+    add_email_to_history(user.id, result["email"])
 
     text = (
         f"✅ <b>អ៊ីម៉ែលបណ្តោះអាសន្នរបស់អ្នក:</b>\n\n"
@@ -126,10 +127,24 @@ async def handle_my_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# ── 📥 Check Inbox ────────────────────────────────────────────────────────────
+# ── 📓 List — show all email addresses the user has ever created ──────────────
 async def handle_inbox(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    await _show_inbox(user.id, reply_to=update.message)
+    history = get_email_history(user.id)
+
+    if not history:
+        await update.message.reply_text(
+            "📭 អ្នកមិនទាន់មានអ៊ីម៉ែលណាទេ។\n\nចុច ✉️ New address ដើម្បីបង្កើត។",
+            reply_markup=MAIN_KEYBOARD
+        )
+        return
+
+    lines = "\n".join(history)
+    await update.message.reply_text(
+        f"📓 <b>អ៊ីម៉ែលទាំងអស់ ({len(history)}):</b>\n\n{lines}",
+        parse_mode="HTML",
+        reply_markup=MAIN_KEYBOARD
+    )
 
 
 # ── 🗑 Delete Email ───────────────────────────────────────────────────────────
@@ -267,6 +282,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             address_id=result["address_id"],
             restore_key=result["restore_key"],
         )
+        add_email_to_history(user.id, result["email"])
         text = (
             f"✅ <b>អ៊ីម៉ែលថ្មីបណ្តោះអាសន្ន:</b>\n\n"
             f"📧 <code>{result['email']}</code>\n\n"

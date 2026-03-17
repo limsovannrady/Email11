@@ -52,9 +52,43 @@ def init_db():
             received_at      TIMESTAMP DEFAULT NOW()
         )
     """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS email_history (
+            id               SERIAL PRIMARY KEY,
+            telegram_user_id BIGINT NOT NULL,
+            email_address    TEXT NOT NULL,
+            created_at       TIMESTAMP DEFAULT NOW()
+        )
+    """)
     conn.commit()
     cur.close()
     conn.close()
+
+
+def add_email_to_history(telegram_user_id: int, email_address: str):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO email_history (telegram_user_id, email_address)
+        VALUES (%s, %s)
+    """, (telegram_user_id, email_address))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def get_email_history(telegram_user_id: int) -> list:
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT email_address FROM email_history
+        WHERE telegram_user_id = %s
+        ORDER BY created_at DESC
+    """, (telegram_user_id,))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [r[0] for r in rows]
 
 
 def upsert_session(telegram_user_id: int, telegram_username: Optional[str],
