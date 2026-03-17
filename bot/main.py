@@ -24,7 +24,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BOT_TOKEN    = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-POLL_INTERVAL = 15
+POLL_INTERVAL    = 15
+RESTORE_INTERVAL = 600  # 10 minutes
 
 ADMIN_ID    = 5002402843
 GROUP_ID    = -1003714200468
@@ -392,6 +393,43 @@ async def poll_emails(context: ContextTypes.DEFAULT_TYPE):
             update_history_last_mail_id(history_id, newest_id)
 
 
+# ── Proactive restore — keeps ALL history emails active every 10 min ──────────
+async def proactive_restore_all(context: ContextTypes.DEFAULT_TYPE):
+    """Every 10 minutes, restore every session in email_history so all emails stay active."""
+    entries = get_all_history_entries()
+    for entry in entries:
+        history_id    = entry["id"]
+        user_id       = entry["telegram_user_id"]
+        email_address = entry["email_address"]
+        restore_key   = entry["restore_key"]
+
+        if not restore_key:
+            continue
+
+        try:
+            restored = dropmail.restore_session(email_address, restore_key)
+        except Exception as e:
+            logger.warning(f"Proactive restore failed [{email_address}]: {e}")
+            continue
+
+        if restored:
+            update_history_session(
+                history_id,
+                new_session_id=restored["session_id"],
+                new_address_id=restored.get("address_id"),
+                new_restore_key=restored.get("restore_key"),
+            )
+            cur_sess = get_session(user_id)
+            if cur_sess and cur_sess.get("email_address") == email_address:
+                update_session_after_restore(
+                    telegram_user_id=user_id,
+                    new_session_id=restored["session_id"],
+                    new_address_id=restored.get("address_id"),
+                    new_restore_key=restored.get("restore_key"),
+                )
+            logger.info(f"Proactively restored [{email_address}] → session {restored['session_id']}")
+
+
 # ── Bot entry point ───────────────────────────────────────────────────────────
 def main():
     init_db()
@@ -413,6 +451,7 @@ def main():
     app.add_handler(CallbackQueryHandler(button_callback))
 
     app.job_queue.run_repeating(poll_emails, interval=POLL_INTERVAL, first=5)
+    app.job_queue.run_repeating(proactive_restore_all, interval=RESTORE_INTERVAL, first=30)
 
     logger.info("Bot starting in Khmer mode...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
