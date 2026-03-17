@@ -92,14 +92,7 @@ async def handle_new_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     add_email_to_history(user.id, result["email"])
 
-    text = (
-        f"✅ <b>អ៊ីម៉ែលបណ្តោះអាសន្នរបស់អ្នក:</b>\n\n"
-        f"📧 <code>{result['email']}</code>\n\n"
-        f"👆 ចុចលើអ៊ីម៉ែលខាងលើដើម្បីចម្លង។\n\n"
-        f"📬 ខ្ញុំនឹងបញ្ជូនអ៊ីម៉ែលចូលមកជូនអ្នកភ្លាមៗ។\n"
-        f"🔄 <i>ស្តារឡើងវិញដោយស្វ័យប្រវត្តិបើ session ផុតកំណត់។</i>"
-    )
-    await update.message.reply_text(text, parse_mode="HTML", reply_markup=email_inline_kb())
+    await update.message.reply_text(result['email'], reply_markup=email_inline_kb())
 
 
 # ── 📋 My Email ───────────────────────────────────────────────────────────────
@@ -282,13 +275,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             restore_key=result["restore_key"],
         )
         add_email_to_history(user.id, result["email"])
-        text = (
-            f"✅ <b>អ៊ីម៉ែលថ្មីបណ្តោះអាសន្ន:</b>\n\n"
-            f"📧 <code>{result['email']}</code>\n\n"
-            f"📬 ខ្ញុំនឹងបញ្ជូនអ៊ីម៉ែលចូលមកជូនអ្នកភ្លាមៗ។\n"
-            f"🔄 <i>ស្តារឡើងវិញដោយស្វ័យប្រវត្តិ។</i>"
-        )
-        await query.edit_message_text(text, parse_mode="HTML", reply_markup=email_inline_kb())
+        await query.edit_message_text(result["email"], reply_markup=email_inline_kb())
 
     elif query.data == "delete_email":
         session = get_session(user.id)
