@@ -92,7 +92,7 @@ async def handle_new_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
                          address_id=result["address_id"],
                          restore_key=result["restore_key"])
 
-    await update.message.reply_text(result['email'])
+    await update.message.reply_text(f"<code>{result['email']}</code>", parse_mode="HTML")
 
 
 # ── 📋 My Email ───────────────────────────────────────────────────────────────
@@ -254,7 +254,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                              dropmail_session_id=result["session_id"],
                              address_id=result["address_id"],
                              restore_key=result["restore_key"])
-        await query.edit_message_text(result["email"])
+        await query.edit_message_text(f"<code>{result['email']}</code>", parse_mode="HTML")
 
     elif query.data == "delete_email":
         session = get_session(user.id)
