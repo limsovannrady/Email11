@@ -57,15 +57,7 @@ def email_inline_kb():
 async def send_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     name = user.first_name or "អ្នក"
-    text = (
-        f"👋 សួស្តី, <b>{name}</b>!\n\n"
-        "ខ្ញុំជា <b>TempMail Bot</b> — ខ្ញុំបង្កើតអ៊ីម៉ែលបណ្តោះអាសន្ន "
-        "ហើយបញ្ជូនអ៊ីម៉ែលចូលដោយផ្ទាល់មកក្នុង chat នេះ។\n\n"
-        "✨ <b>មុខងារ:</b>\n"
-        "  • អ៊ីម៉ែលត្រូវបានស្តារឡើងវិញដោយស្វ័យប្រវត្តិ\n"
-        "  • ទទួលអ៊ីម៉ែលភ្លាមៗ\n\n"
-        "👇 ចុចប៊ូតុងខាងក្រោមដើម្បីចាប់ផ្តើម!"
-    )
+    text = f"សួស្តី {name}"
     await update.message.reply_text(text, parse_mode="HTML", reply_markup=MAIN_KEYBOARD)
 
 
