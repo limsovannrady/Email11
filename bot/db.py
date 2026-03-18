@@ -63,6 +63,10 @@ def get_history_entry_by_email(telegram_user_id: int, email_address: str) -> Opt
     return None
 
 
+def get_user_history_entries(telegram_user_id: int) -> list:
+    return [e for e in _history.values() if e["telegram_user_id"] == telegram_user_id]
+
+
 def remove_email_from_history(history_id: int):
     _history.pop(history_id, None)
 

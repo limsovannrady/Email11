@@ -15,6 +15,7 @@ from db import (
     update_last_mail_id, update_session_after_restore, deactivate_session,
     log_mail, get_stats, add_email_to_history, get_email_history,
     get_all_history_entries, update_history_session, update_history_last_mail_id,
+    get_history_entry_by_email, get_user_history_entries, remove_email_from_history,
 )
 import dropmail
 
@@ -143,29 +144,28 @@ async def handle_inbox(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode="HTML", reply_markup=MAIN_KEYBOARD)
 
 
-# ── 🗑️ Delete current session ─────────────────────────────────────────────────
+# ── 🗑️ Delete — show email picker ─────────────────────────────────────────────
 async def handle_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_chat_action(ChatAction.TYPING)
     user    = update.effective_user
-    session = get_session(user.id)
+    entries = get_user_history_entries(user.id)
 
-    if not session or not session.get("is_active"):
+    if not entries:
         await update.message.reply_text(
-            "❌ អ្នកមិនមាន session ដែលសកម្មទេ។",
+            "📭 គ្មាន email ណាទេ។",
             reply_markup=MAIN_KEYBOARD
         )
         return
 
-    address_id = session.get("address_id")
-    if address_id:
-        dropmail.delete_address(address_id)
+    buttons = [
+        [InlineKeyboardButton(e["email_address"], callback_data=f"del_email:{e['email_address']}")]
+        for e in entries
+    ]
+    kb = InlineKeyboardMarkup(buttons)
 
-    deactivate_session(user.id)
     await update.message.reply_text(
-        "🗑 <b>អ៊ីម៉ែលត្រូវបានលុបចោលហើយ។</b>\n\n"
-        "ចុច <b>✉️ New address</b> ដើម្បីបង្កើតអ៊ីម៉ែលថ្មីម្ដងទៀត។",
-        parse_mode="HTML",
-        reply_markup=MAIN_KEYBOARD
+        "ជ្រើសរើស Email ដែលអ្នកចង់លុប៖",
+        reply_markup=kb
     )
 
 
@@ -296,6 +296,23 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             "🗑 <b>អ៊ីម៉ែលត្រូវបានលុបចោលហើយ។</b>\n\n"
             "ចុច <b>📧 អ៊ីម៉ែលថ្មី</b> ដើម្បីបង្កើតថ្មី។",
+            parse_mode="HTML"
+        )
+
+    elif query.data.startswith("del_email:"):
+        email_to_delete = query.data[len("del_email:"):]
+        entry = get_history_entry_by_email(user.id, email_to_delete)
+        if not entry:
+            await query.edit_message_text(f"❌ រកមិនឃើញ <code>{email_to_delete}</code>", parse_mode="HTML")
+            return
+        if entry.get("address_id"):
+            dropmail.delete_address(entry["address_id"])
+        remove_email_from_history(entry["id"])
+        session = get_session(user.id)
+        if session and session.get("email_address") == email_to_delete:
+            deactivate_session(user.id)
+        await query.edit_message_text(
+            f"🗑 លុប <code>{email_to_delete}</code> បានសម្រេច។",
             parse_mode="HTML"
         )
 
