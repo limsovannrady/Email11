@@ -1,6 +1,6 @@
 import os
 import logging
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup, ChatAction
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -56,6 +56,7 @@ def email_inline_kb():
 
 # ── /start ────────────────────────────────────────────────────────────────────
 async def send_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_chat_action(ChatAction.TYPING)
     user = update.effective_user
     name = user.first_name or "អ្នក"
     text = f"សួស្តី {name}"
@@ -64,6 +65,7 @@ async def send_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── 📧 New Email ──────────────────────────────────────────────────────────────
 async def handle_new_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_chat_action(ChatAction.TYPING)
     user = update.effective_user
 
     try:
@@ -98,6 +100,7 @@ async def handle_new_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── 📋 My Email ───────────────────────────────────────────────────────────────
 async def handle_my_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_chat_action(ChatAction.TYPING)
     user = update.effective_user
     session = get_session(user.id)
 
@@ -122,6 +125,7 @@ async def handle_my_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── 📓 List — show all emails ever created ───────────────────────────────────
 async def handle_inbox(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_chat_action(ChatAction.TYPING)
     user    = update.effective_user
     history = get_email_history(user.id)
 
@@ -139,6 +143,7 @@ async def handle_inbox(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── /delete {email} ───────────────────────────────────────────────────────────
 async def handle_delete_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_chat_action(ChatAction.TYPING)
     user = update.effective_user
 
     if not context.args:
