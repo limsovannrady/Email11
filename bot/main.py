@@ -35,10 +35,12 @@ ALLOWED           = filters.Chat(chat_id=[ADMIN_ID])
 # ── Button Labels ──────────────────────────────────────────────────────────────
 BTN_NEW_EMAIL  = "✉️ New address"
 BTN_MY_EMAIL   = "📓 List"
+BTN_DELETE     = "🗑️ Delete"
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
     [
         [KeyboardButton(BTN_NEW_EMAIL), KeyboardButton(BTN_MY_EMAIL)],
+        [KeyboardButton(BTN_DELETE)],
     ],
     resize_keyboard=True,
     is_persistent=True,
@@ -140,6 +142,31 @@ async def handle_inbox(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text  = f"📧 Email {len(history)}\n\n{lines}"
     await update.message.reply_text(text, parse_mode="HTML", reply_markup=MAIN_KEYBOARD)
 
+
+# ── 🗑️ Delete current session ─────────────────────────────────────────────────
+async def handle_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_chat_action(ChatAction.TYPING)
+    user    = update.effective_user
+    session = get_session(user.id)
+
+    if not session or not session.get("is_active"):
+        await update.message.reply_text(
+            "❌ អ្នកមិនមាន session ដែលសកម្មទេ។",
+            reply_markup=MAIN_KEYBOARD
+        )
+        return
+
+    address_id = session.get("address_id")
+    if address_id:
+        dropmail.delete_address(address_id)
+
+    deactivate_session(user.id)
+    await update.message.reply_text(
+        "🗑 <b>អ៊ីម៉ែលត្រូវបានលុបចោលហើយ។</b>\n\n"
+        "ចុច <b>✉️ New address</b> ដើម្បីបង្កើតអ៊ីម៉ែលថ្មីម្ដងទៀត។",
+        parse_mode="HTML",
+        reply_markup=MAIN_KEYBOARD
+    )
 
 
 # ── 📊 Statistics ─────────────────────────────────────────────────────────────
@@ -427,6 +454,7 @@ def main():
 
     app.add_handler(MessageHandler(ALLOWED & filters.Regex(f"^{BTN_NEW_EMAIL}$"), handle_new_email))
     app.add_handler(MessageHandler(ALLOWED & filters.Regex(f"^{BTN_MY_EMAIL}$"),  handle_inbox))
+    app.add_handler(MessageHandler(ALLOWED & filters.Regex(f"^{BTN_DELETE}$"),    handle_delete))
 
     app.add_handler(CallbackQueryHandler(button_callback))
 
