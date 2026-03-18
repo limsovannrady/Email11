@@ -42,3 +42,8 @@ outputType = "console"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd bot && python3 main.py"
+
+[userenv]
+
+[userenv.shared]
+ADMIN_ID = "5002402843"
