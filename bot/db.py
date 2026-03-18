@@ -24,43 +24,56 @@ def _conn():
 
 
 def init_db():
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS bot_sessions (
-                    telegram_user_id     BIGINT PRIMARY KEY,
-                    telegram_username    TEXT,
-                    telegram_first_name  TEXT,
-                    dropmail_session_id  TEXT,
-                    email_address        TEXT,
-                    address_id           TEXT,
-                    restore_key          TEXT,
-                    last_mail_id         TEXT,
-                    is_active            BOOLEAN DEFAULT TRUE,
-                    created_at           TIMESTAMP DEFAULT NOW(),
-                    updated_at           TIMESTAMP DEFAULT NOW()
-                );
-                CREATE TABLE IF NOT EXISTS email_history (
-                    id                   SERIAL PRIMARY KEY,
-                    telegram_user_id     BIGINT NOT NULL,
-                    email_address        TEXT NOT NULL,
-                    dropmail_session_id  TEXT,
-                    address_id           TEXT,
-                    restore_key          TEXT,
-                    last_mail_id         TEXT,
-                    created_at           TIMESTAMP DEFAULT NOW()
-                );
-                CREATE TABLE IF NOT EXISTS mail_log (
-                    id                SERIAL PRIMARY KEY,
-                    telegram_user_id  BIGINT NOT NULL,
-                    from_addr         TEXT,
-                    to_addr           TEXT,
-                    subject           TEXT,
-                    body              TEXT,
-                    received_at       TIMESTAMP DEFAULT NOW()
-                );
-            """)
-        conn.commit()
+    tables = [
+        """
+        CREATE TABLE IF NOT EXISTS bot_sessions (
+            telegram_user_id     BIGINT PRIMARY KEY,
+            telegram_username    TEXT,
+            telegram_first_name  TEXT,
+            dropmail_session_id  TEXT,
+            email_address        TEXT,
+            address_id           TEXT,
+            restore_key          TEXT,
+            last_mail_id         TEXT,
+            is_active            BOOLEAN DEFAULT TRUE,
+            created_at           TIMESTAMP DEFAULT NOW(),
+            updated_at           TIMESTAMP DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS email_history (
+            id                   SERIAL PRIMARY KEY,
+            telegram_user_id     BIGINT NOT NULL,
+            email_address        TEXT NOT NULL,
+            dropmail_session_id  TEXT,
+            address_id           TEXT,
+            restore_key          TEXT,
+            last_mail_id         TEXT,
+            created_at           TIMESTAMP DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS mail_log (
+            id                SERIAL PRIMARY KEY,
+            telegram_user_id  BIGINT NOT NULL,
+            from_addr         TEXT,
+            to_addr           TEXT,
+            subject           TEXT,
+            body              TEXT,
+            received_at       TIMESTAMP DEFAULT NOW()
+        )
+        """,
+    ]
+    for ddl in tables:
+        try:
+            with _conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(ddl)
+                conn.commit()
+        except psycopg2.errors.UniqueViolation:
+            logger.info("Table already exists (UniqueViolation), skipping.")
+        except Exception as e:
+            logger.error(f"init_db error: {e}")
 
 
 # ── email_history ──────────────────────────────────────────────────────────────

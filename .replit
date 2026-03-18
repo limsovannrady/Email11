@@ -46,4 +46,3 @@ args = "cd bot && python3 main.py"
 [userenv]
 
 [userenv.shared]
-ADMIN_ID = "5002402843"
