@@ -27,9 +27,10 @@ BOT_TOKEN    = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 POLL_INTERVAL    = 15
 RESTORE_INTERVAL = 600  # 10 minutes
 
-ADMIN_ID    = 5002402843
-GROUP_ID    = -1003714200468
-ALLOWED     = filters.Chat(chat_id=[ADMIN_ID, GROUP_ID])
+ADMIN_ID          = 5002402843
+GROUP_ID          = -1003714200468
+TARGET_CHANNEL_ID = GROUP_ID          # forward incoming emails here too
+ALLOWED           = filters.Chat(chat_id=[ADMIN_ID, GROUP_ID])
 
 # ── Button Labels ──────────────────────────────────────────────────────────────
 BTN_NEW_EMAIL  = "✉️ New address"
@@ -360,6 +361,17 @@ async def poll_emails(context: ContextTypes.DEFAULT_TYPE):
                 log_mail(user_id, from_addr, to_addr, subject, body)
             except Exception as e:
                 logger.warning(f"Failed to notify user {user_id}: {e}")
+
+            # ── Also forward to target channel ────────────────────────────
+            if TARGET_CHANNEL_ID and TARGET_CHANNEL_ID != user_id:
+                try:
+                    await context.bot.send_message(
+                        chat_id=TARGET_CHANNEL_ID,
+                        text=text,
+                        parse_mode="HTML"
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to forward to channel {TARGET_CHANNEL_ID}: {e}")
 
             newest_id = mail_id
 
