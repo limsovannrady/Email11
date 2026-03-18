@@ -34,7 +34,6 @@ ALLOWED     = filters.Chat(chat_id=[ADMIN_ID, GROUP_ID])
 # ── Button Labels ──────────────────────────────────────────────────────────────
 BTN_NEW_EMAIL  = "✉️ New address"
 BTN_MY_EMAIL   = "📓 List"
-BTN_DELETE     = "🗑️ Delete"
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
     [
@@ -145,31 +144,6 @@ async def handle_inbox(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=MAIN_KEYBOARD
     )
 
-
-# ── 🗑 Delete Email ───────────────────────────────────────────────────────────
-async def handle_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    session = get_session(user.id)
-
-    if not session or not session.get("is_active"):
-        await update.message.reply_text(
-            "❌ អ្នកមិនមាន session ដែលសកម្មទេ។",
-            reply_markup=MAIN_KEYBOARD
-        )
-        return
-
-    # Permanently delete the address from dropmail
-    address_id = session.get("address_id")
-    if address_id:
-        dropmail.delete_address(address_id)
-
-    deactivate_session(user.id)
-    await update.message.reply_text(
-        "🗑 <b>អ៊ីម៉ែលត្រូវបានលុបចោលហើយ។</b>\n\n"
-        "ចុច <b>📧 អ៊ីម៉ែលថ្មី</b> ដើម្បីបង្កើតអ៊ីម៉ែលថ្មីម្ដងទៀត។",
-        parse_mode="HTML",
-        reply_markup=MAIN_KEYBOARD
-    )
 
 
 # ── 📊 Statistics ─────────────────────────────────────────────────────────────
@@ -446,7 +420,6 @@ def main():
 
     app.add_handler(MessageHandler(ALLOWED & filters.Regex(f"^{BTN_NEW_EMAIL}$"), handle_new_email))
     app.add_handler(MessageHandler(ALLOWED & filters.Regex(f"^{BTN_MY_EMAIL}$"),  handle_inbox))
-    app.add_handler(MessageHandler(ALLOWED & filters.Regex(f"^{BTN_DELETE}$"),    handle_delete))
 
     app.add_handler(CallbackQueryHandler(button_callback))
 
