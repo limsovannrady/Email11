@@ -7,7 +7,7 @@ A Python Telegram bot that creates disposable email addresses using the dropmail
 - **Language**: Python 3.11
 - **Bot Framework**: python-telegram-bot v22 (async, with job-queue for polling)
 - **Email API**: dropmail.me GraphQL API
-- **Storage**: In-memory (no database required)
+- **Storage**: PostgreSQL (Replit built-in database)
 
 ## Project Structure
 
