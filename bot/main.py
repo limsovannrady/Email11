@@ -28,9 +28,8 @@ POLL_INTERVAL    = 15
 RESTORE_INTERVAL = 600  # 10 minutes
 
 ADMIN_ID          = 5002402843
-GROUP_ID          = -1003714200468
 TARGET_CHANNEL_ID = int(os.environ.get("CHANNEL_ID", 0)) or None
-ALLOWED           = filters.Chat(chat_id=[ADMIN_ID, GROUP_ID])
+ALLOWED           = filters.Chat(chat_id=[ADMIN_ID])
 
 # ── Button Labels ──────────────────────────────────────────────────────────────
 BTN_NEW_EMAIL  = "✉️ New address"
@@ -233,7 +232,7 @@ async def _show_inbox(user_id: int, reply_to=None, callback_query=None):
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user  = query.from_user
-    if user.id != ADMIN_ID and update.effective_chat.id != GROUP_ID:
+    if user.id != ADMIN_ID:
         await query.answer("⛔ អ្នកមិនមានសិទ្ធិប្រើ bot នេះទេ។", show_alert=True)
         return
     await query.answer()
