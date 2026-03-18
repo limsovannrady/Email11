@@ -131,10 +131,9 @@ async def handle_inbox(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    await update.message.reply_text(
-        "\n".join(history),
-        reply_markup=MAIN_KEYBOARD
-    )
+    lines = "\n".join(f"{i+1}- <code>{email}</code>" for i, email in enumerate(history))
+    text  = f"📧 Email {len(history)}\n\n{lines}"
+    await update.message.reply_text(text, parse_mode="HTML", reply_markup=MAIN_KEYBOARD)
 
 
 
