@@ -29,7 +29,7 @@ RESTORE_INTERVAL = 600  # 10 minutes
 
 ADMIN_ID          = 5002402843
 GROUP_ID          = -1003714200468
-TARGET_CHANNEL_ID = GROUP_ID          # forward incoming emails here too
+TARGET_CHANNEL_ID = int(os.environ.get("CHANNEL_ID", 0)) or None
 ALLOWED           = filters.Chat(chat_id=[ADMIN_ID, GROUP_ID])
 
 # ── Button Labels ──────────────────────────────────────────────────────────────
