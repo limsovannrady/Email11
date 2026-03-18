@@ -464,8 +464,6 @@ def main():
         raise ValueError("TELEGRAM_BOT_TOKEN is not set!")
     if not dropmail.DROPMAIL_TOKEN:
         raise ValueError("DROPMAIL_API_TOKEN is not set!")
-    if not os.environ.get("DATABASE_URL"):
-        raise ValueError("DATABASE_URL is not set!")
 
     app = Application.builder().token(BOT_TOKEN).build()
 

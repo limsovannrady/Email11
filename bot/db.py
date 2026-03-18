@@ -1,79 +1,17 @@
-import os
-import time
 import logging
-import psycopg2
-import psycopg2.extras
 from typing import Optional
+from datetime import datetime
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
 logger = logging.getLogger(__name__)
 
-
-def _conn():
-    last_err = None
-    for attempt in range(5):
-        try:
-            conn = psycopg2.connect(DATABASE_URL, connect_timeout=10)
-            return conn
-        except psycopg2.OperationalError as e:
-            last_err = e
-            wait = 2 ** attempt
-            logger.warning(f"DB connection failed (attempt {attempt+1}/5), retrying in {wait}s: {e}")
-            time.sleep(wait)
-    raise last_err
+_sessions = {}
+_email_history = {}
+_history_counter = 0
+_mail_log = []
 
 
 def init_db():
-    tables = [
-        """
-        CREATE TABLE IF NOT EXISTS bot_sessions (
-            telegram_user_id     BIGINT PRIMARY KEY,
-            telegram_username    TEXT,
-            telegram_first_name  TEXT,
-            dropmail_session_id  TEXT,
-            email_address        TEXT,
-            address_id           TEXT,
-            restore_key          TEXT,
-            last_mail_id         TEXT,
-            is_active            BOOLEAN DEFAULT TRUE,
-            created_at           TIMESTAMP DEFAULT NOW(),
-            updated_at           TIMESTAMP DEFAULT NOW()
-        )
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS email_history (
-            id                   SERIAL PRIMARY KEY,
-            telegram_user_id     BIGINT NOT NULL,
-            email_address        TEXT NOT NULL,
-            dropmail_session_id  TEXT,
-            address_id           TEXT,
-            restore_key          TEXT,
-            last_mail_id         TEXT,
-            created_at           TIMESTAMP DEFAULT NOW()
-        )
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS mail_log (
-            id                SERIAL PRIMARY KEY,
-            telegram_user_id  BIGINT NOT NULL,
-            from_addr         TEXT,
-            to_addr           TEXT,
-            subject           TEXT,
-            body              TEXT,
-            received_at       TIMESTAMP DEFAULT NOW()
-        )
-        """,
-    ]
-    for ddl in tables:
-        try:
-            with _conn() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(ddl)
-                conn.commit()
-        except psycopg2.errors.UniqueViolation:
-            logger.info("Table already exists (UniqueViolation), skipping.")
-        except Exception as e:
-            logger.error(f"init_db error: {e}")
+    logger.info("Using in-memory storage (no database required).")
 
 
 # ── email_history ──────────────────────────────────────────────────────────────
@@ -82,90 +20,75 @@ def add_email_to_history(telegram_user_id: int, email_address: str,
                          dropmail_session_id: Optional[str] = None,
                          address_id: Optional[str] = None,
                          restore_key: Optional[str] = None):
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO email_history
-                    (telegram_user_id, email_address, dropmail_session_id, address_id, restore_key)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (telegram_user_id, email_address, dropmail_session_id, address_id, restore_key))
-        conn.commit()
+    global _history_counter
+    _history_counter += 1
+    if telegram_user_id not in _email_history:
+        _email_history[telegram_user_id] = {}
+    _email_history[telegram_user_id][_history_counter] = {
+        "id": _history_counter,
+        "telegram_user_id": telegram_user_id,
+        "email_address": email_address,
+        "dropmail_session_id": dropmail_session_id,
+        "address_id": address_id,
+        "restore_key": restore_key,
+        "last_mail_id": None,
+        "created_at": datetime.now(),
+    }
 
 
 def get_email_history(telegram_user_id: int) -> list:
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT email_address FROM email_history
-                WHERE telegram_user_id = %s
-                ORDER BY created_at DESC
-            """, (telegram_user_id,))
-            return [row[0] for row in cur.fetchall()]
+    user_history = _email_history.get(telegram_user_id, {})
+    entries = sorted(user_history.values(), key=lambda x: x["created_at"], reverse=True)
+    return [e["email_address"] for e in entries]
 
 
 def get_all_history_entries() -> list:
-    with _conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute("""
-                SELECT * FROM email_history
-                WHERE restore_key IS NOT NULL
-            """)
-            return [dict(r) for r in cur.fetchall()]
+    all_entries = []
+    for user_history in _email_history.values():
+        for entry in user_history.values():
+            if entry.get("restore_key"):
+                all_entries.append(dict(entry))
+    return all_entries
 
 
 def get_user_history_entries(telegram_user_id: int) -> list:
-    with _conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute("""
-                SELECT * FROM email_history
-                WHERE telegram_user_id = %s
-                ORDER BY created_at DESC
-            """, (telegram_user_id,))
-            return [dict(r) for r in cur.fetchall()]
+    user_history = _email_history.get(telegram_user_id, {})
+    entries = sorted(user_history.values(), key=lambda x: x["created_at"], reverse=True)
+    return [dict(e) for e in entries]
 
 
 def get_history_entry_by_email(telegram_user_id: int, email_address: str) -> Optional[dict]:
-    with _conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute("""
-                SELECT * FROM email_history
-                WHERE telegram_user_id = %s AND email_address = %s
-                LIMIT 1
-            """, (telegram_user_id, email_address))
-            row = cur.fetchone()
-            return dict(row) if row else None
+    user_history = _email_history.get(telegram_user_id, {})
+    for entry in user_history.values():
+        if entry["email_address"] == email_address:
+            return dict(entry)
+    return None
 
 
 def update_history_session(history_id: int, new_session_id: str,
                            new_address_id: Optional[str],
                            new_restore_key: Optional[str]):
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                UPDATE email_history
-                SET dropmail_session_id = %s,
-                    address_id          = %s,
-                    restore_key         = %s,
-                    last_mail_id        = NULL
-                WHERE id = %s
-            """, (new_session_id, new_address_id, new_restore_key, history_id))
-        conn.commit()
+    for user_history in _email_history.values():
+        if history_id in user_history:
+            user_history[history_id]["dropmail_session_id"] = new_session_id
+            user_history[history_id]["address_id"] = new_address_id
+            user_history[history_id]["restore_key"] = new_restore_key
+            user_history[history_id]["last_mail_id"] = None
+            return
 
 
 def update_history_last_mail_id(history_id: int, mail_id: str):
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                UPDATE email_history SET last_mail_id = %s WHERE id = %s
-            """, (mail_id, history_id))
-        conn.commit()
+    for user_history in _email_history.values():
+        if history_id in user_history:
+            user_history[history_id]["last_mail_id"] = mail_id
+            return
 
 
 def remove_email_from_history(history_id: int):
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM email_history WHERE id = %s", (history_id,))
-        conn.commit()
+    for user_history in _email_history.values():
+        if history_id in user_history:
+            del user_history[history_id]
+            return
 
 
 # ── bot_sessions ───────────────────────────────────────────────────────────────
@@ -175,118 +98,82 @@ def upsert_session(telegram_user_id: int, telegram_username: Optional[str],
                    dropmail_session_id: str, email_address: str,
                    address_id: Optional[str] = None,
                    restore_key: Optional[str] = None):
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO bot_sessions
-                    (telegram_user_id, telegram_username, telegram_first_name,
-                     dropmail_session_id, email_address, address_id, restore_key,
-                     last_mail_id, is_active, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, NULL, TRUE, NOW())
-                ON CONFLICT (telegram_user_id) DO UPDATE SET
-                    telegram_username    = EXCLUDED.telegram_username,
-                    telegram_first_name  = EXCLUDED.telegram_first_name,
-                    dropmail_session_id  = EXCLUDED.dropmail_session_id,
-                    email_address        = EXCLUDED.email_address,
-                    address_id           = EXCLUDED.address_id,
-                    restore_key          = EXCLUDED.restore_key,
-                    last_mail_id         = NULL,
-                    is_active            = TRUE,
-                    updated_at           = NOW()
-            """, (telegram_user_id, telegram_username, telegram_first_name,
-                  dropmail_session_id, email_address, address_id, restore_key))
-        conn.commit()
+    existing = _sessions.get(telegram_user_id, {})
+    _sessions[telegram_user_id] = {
+        "telegram_user_id": telegram_user_id,
+        "telegram_username": telegram_username,
+        "telegram_first_name": telegram_first_name,
+        "dropmail_session_id": dropmail_session_id,
+        "email_address": email_address,
+        "address_id": address_id,
+        "restore_key": restore_key,
+        "last_mail_id": None,
+        "is_active": True,
+        "created_at": existing.get("created_at", datetime.now()),
+        "updated_at": datetime.now(),
+    }
 
 
 def get_session(telegram_user_id: int) -> Optional[dict]:
-    with _conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute("""
-                SELECT * FROM bot_sessions WHERE telegram_user_id = %s
-            """, (telegram_user_id,))
-            row = cur.fetchone()
-            return dict(row) if row else None
+    return dict(_sessions[telegram_user_id]) if telegram_user_id in _sessions else None
 
 
 def get_all_active_sessions() -> list:
-    with _conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute("""
-                SELECT * FROM bot_sessions
-                WHERE is_active = TRUE AND dropmail_session_id IS NOT NULL
-            """)
-            return [dict(r) for r in cur.fetchall()]
+    return [
+        dict(s) for s in _sessions.values()
+        if s.get("is_active") and s.get("dropmail_session_id")
+    ]
 
 
 def update_last_mail_id(telegram_user_id: int, mail_id: str):
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                UPDATE bot_sessions SET last_mail_id = %s WHERE telegram_user_id = %s
-            """, (mail_id, telegram_user_id))
-        conn.commit()
+    if telegram_user_id in _sessions:
+        _sessions[telegram_user_id]["last_mail_id"] = mail_id
 
 
 def update_session_after_restore(telegram_user_id: int,
                                  new_session_id: str,
                                  new_address_id: Optional[str],
                                  new_restore_key: Optional[str]):
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                UPDATE bot_sessions SET
-                    dropmail_session_id = %s,
-                    address_id          = %s,
-                    restore_key         = %s,
-                    last_mail_id        = NULL,
-                    is_active           = TRUE,
-                    updated_at          = NOW()
-                WHERE telegram_user_id = %s
-            """, (new_session_id, new_address_id, new_restore_key, telegram_user_id))
-        conn.commit()
+    if telegram_user_id in _sessions:
+        _sessions[telegram_user_id]["dropmail_session_id"] = new_session_id
+        _sessions[telegram_user_id]["address_id"] = new_address_id
+        _sessions[telegram_user_id]["restore_key"] = new_restore_key
+        _sessions[telegram_user_id]["last_mail_id"] = None
+        _sessions[telegram_user_id]["is_active"] = True
+        _sessions[telegram_user_id]["updated_at"] = datetime.now()
 
 
 def deactivate_session(telegram_user_id: int):
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                UPDATE bot_sessions SET
-                    is_active           = FALSE,
-                    dropmail_session_id = NULL,
-                    email_address       = NULL,
-                    address_id          = NULL,
-                    restore_key         = NULL,
-                    last_mail_id        = NULL,
-                    updated_at          = NOW()
-                WHERE telegram_user_id = %s
-            """, (telegram_user_id,))
-        conn.commit()
+    if telegram_user_id in _sessions:
+        _sessions[telegram_user_id]["is_active"] = False
+        _sessions[telegram_user_id]["dropmail_session_id"] = None
+        _sessions[telegram_user_id]["email_address"] = None
+        _sessions[telegram_user_id]["address_id"] = None
+        _sessions[telegram_user_id]["restore_key"] = None
+        _sessions[telegram_user_id]["last_mail_id"] = None
+        _sessions[telegram_user_id]["updated_at"] = datetime.now()
 
 
 # ── mail_log ───────────────────────────────────────────────────────────────────
 
 def log_mail(telegram_user_id: int, from_addr: str, to_addr: str,
              subject: str, body: str):
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO mail_log (telegram_user_id, from_addr, to_addr, subject, body)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (telegram_user_id, from_addr, to_addr, subject, body))
-        conn.commit()
+    _mail_log.append({
+        "telegram_user_id": telegram_user_id,
+        "from_addr": from_addr,
+        "to_addr": to_addr,
+        "subject": subject,
+        "body": body,
+        "received_at": datetime.now(),
+    })
 
 
 def get_stats() -> dict:
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM bot_sessions")
-            total_users = cur.fetchone()[0]
-            cur.execute("SELECT COUNT(*) FROM bot_sessions WHERE is_active = TRUE")
-            active_sessions = cur.fetchone()[0]
-            cur.execute("SELECT COUNT(*) FROM mail_log")
-            total_emails = cur.fetchone()[0]
+    total_users = len(_sessions)
+    active_sessions = sum(1 for s in _sessions.values() if s.get("is_active"))
+    total_emails = len(_mail_log)
     return {
-        "total_users":    total_users,
+        "total_users": total_users,
         "active_sessions": active_sessions,
-        "total_emails":   total_emails,
+        "total_emails": total_emails,
     }
