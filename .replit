@@ -36,9 +36,9 @@ args = "Start application"
 name = "Start application"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "console"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd bot && python3 main.py"
-
-[workflows.workflow.metadata]
-outputType = "console"
