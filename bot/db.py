@@ -6,7 +6,9 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-DATA_FILE = os.path.join(os.path.dirname(__file__), "data.json")
+_data_dir = os.environ.get("DATA_DIR", os.path.dirname(__file__))
+os.makedirs(_data_dir, exist_ok=True)
+DATA_FILE = os.path.join(_data_dir, "data.json")
 
 _sessions = {}
 _email_history = {}

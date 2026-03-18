@@ -13,3 +13,4 @@ uv.lock
 .upm/
 .cache/
 .pythonlibs/
+bot/data.json
