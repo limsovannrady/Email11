@@ -14,6 +14,7 @@ from db import (
     update_last_mail_id, update_session_after_restore, deactivate_session,
     log_mail, get_stats, add_email_to_history, get_email_history,
     get_all_history_entries, update_history_session, update_history_last_mail_id,
+    get_history_entry_by_email, remove_email_from_history,
 )
 import dropmail
 
@@ -135,6 +136,44 @@ async def handle_inbox(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text  = f"📧 Email {len(history)}\n\n{lines}"
     await update.message.reply_text(text, parse_mode="HTML", reply_markup=MAIN_KEYBOARD)
 
+
+# ── /delete {email} ───────────────────────────────────────────────────────────
+async def handle_delete_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not context.args:
+        await update.message.reply_text(
+            "❌ សូមបញ្ចូល email ដែលចង់លុប។\n\nឧទាហរណ៍: <code>/delete example@dropmail.me</code>",
+            parse_mode="HTML", reply_markup=MAIN_KEYBOARD
+        )
+        return
+
+    email_to_delete = context.args[0].strip()
+    entry = get_history_entry_by_email(user.id, email_to_delete)
+
+    if not entry:
+        await update.message.reply_text(
+            f"❌ រកមិនឃើញ <code>{email_to_delete}</code> ក្នុងបញ្ជីរបស់អ្នក។",
+            parse_mode="HTML", reply_markup=MAIN_KEYBOARD
+        )
+        return
+
+    # Delete from dropmail API
+    if entry.get("address_id"):
+        dropmail.delete_address(entry["address_id"])
+
+    # Remove from history
+    remove_email_from_history(entry["id"])
+
+    # Deactivate current session if it's the same email
+    session = get_session(user.id)
+    if session and session.get("email_address") == email_to_delete:
+        deactivate_session(user.id)
+
+    await update.message.reply_text(
+        f"🗑 លុប <code>{email_to_delete}</code> បានសម្រេច។",
+        parse_mode="HTML", reply_markup=MAIN_KEYBOARD
+    )
 
 
 # ── 📊 Statistics ─────────────────────────────────────────────────────────────
@@ -418,7 +457,8 @@ def main():
 
     app = Application.builder().token(BOT_TOKEN).build()
 
-    app.add_handler(CommandHandler("start", send_welcome, filters=ALLOWED))
+    app.add_handler(CommandHandler("start",  send_welcome,          filters=ALLOWED))
+    app.add_handler(CommandHandler("delete", handle_delete_command, filters=ALLOWED))
 
     app.add_handler(MessageHandler(ALLOWED & filters.Regex(f"^{BTN_NEW_EMAIL}$"), handle_new_email))
     app.add_handler(MessageHandler(ALLOWED & filters.Regex(f"^{BTN_MY_EMAIL}$"),  handle_inbox))

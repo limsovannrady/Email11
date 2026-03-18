@@ -56,6 +56,17 @@ def update_history_last_mail_id(history_id: int, mail_id: str):
         _history[history_id]["last_mail_id"] = mail_id
 
 
+def get_history_entry_by_email(telegram_user_id: int, email_address: str) -> Optional[dict]:
+    for entry in _history.values():
+        if entry["telegram_user_id"] == telegram_user_id and entry["email_address"] == email_address:
+            return entry
+    return None
+
+
+def remove_email_from_history(history_id: int):
+    _history.pop(history_id, None)
+
+
 # ── bot_sessions ──────────────────────────────────────────────────────────────
 
 def upsert_session(telegram_user_id: int, telegram_username: Optional[str],
