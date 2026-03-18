@@ -149,37 +149,39 @@ async def handle_delete_command(update: Update, context: ContextTypes.DEFAULT_TY
 
     if not context.args:
         await update.message.reply_text(
-            "❌ សូមបញ្ចូល email ដែលចង់លុប។\n\nឧទាហរណ៍: <code>/delete example@dropmail.me</code>",
+            "❌ សូមបញ្ចូល email ដែលចង់លុប។\n\nឧទាហរណ៍: <code>/delete a@x.com b@x.com c@x.com</code>",
             parse_mode="HTML", reply_markup=MAIN_KEYBOARD
         )
         return
 
-    email_to_delete = context.args[0].strip()
-    entry = get_history_entry_by_email(user.id, email_to_delete)
-
-    if not entry:
-        await update.message.reply_text(
-            f"❌ រកមិនឃើញ <code>{email_to_delete}</code> ក្នុងបញ្ជីរបស់អ្នក។",
-            parse_mode="HTML", reply_markup=MAIN_KEYBOARD
-        )
-        return
-
-    # Delete from dropmail API
-    if entry.get("address_id"):
-        dropmail.delete_address(entry["address_id"])
-
-    # Remove from history
-    remove_email_from_history(entry["id"])
-
-    # Deactivate current session if it's the same email
+    deleted, not_found = [], []
     session = get_session(user.id)
-    if session and session.get("email_address") == email_to_delete:
-        deactivate_session(user.id)
 
-    await update.message.reply_text(
-        f"🗑 លុប <code>{email_to_delete}</code> បានសម្រេច។",
-        parse_mode="HTML", reply_markup=MAIN_KEYBOARD
-    )
+    for email_to_delete in context.args:
+        email_to_delete = email_to_delete.strip()
+        entry = get_history_entry_by_email(user.id, email_to_delete)
+
+        if not entry:
+            not_found.append(email_to_delete)
+            continue
+
+        if entry.get("address_id"):
+            dropmail.delete_address(entry["address_id"])
+
+        remove_email_from_history(entry["id"])
+
+        if session and session.get("email_address") == email_to_delete:
+            deactivate_session(user.id)
+
+        deleted.append(email_to_delete)
+
+    lines = []
+    if deleted:
+        lines.append("\n".join(f"🗑 <code>{e}</code>" for e in deleted))
+    if not_found:
+        lines.append("\n".join(f"❌ រកមិនឃើញ <code>{e}</code>" for e in not_found))
+
+    await update.message.reply_text("\n".join(lines), parse_mode="HTML", reply_markup=MAIN_KEYBOARD)
 
 
 # ── 📊 Statistics ─────────────────────────────────────────────────────────────
