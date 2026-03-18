@@ -29,7 +29,7 @@ BOT_TOKEN    = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 POLL_INTERVAL    = 15
 RESTORE_INTERVAL = 600  # 10 minutes
 
-ADMIN_ID          = 5002402843
+ADMIN_ID          = int(os.environ.get("ADMIN_ID", 5002402843))
 TARGET_CHANNEL_ID = int(os.environ.get("CHANNEL_ID", 0)) or None
 ALLOWED           = filters.Chat(chat_id=[ADMIN_ID])
 
@@ -464,6 +464,8 @@ def main():
         raise ValueError("TELEGRAM_BOT_TOKEN is not set!")
     if not dropmail.DROPMAIL_TOKEN:
         raise ValueError("DROPMAIL_API_TOKEN is not set!")
+    if not os.environ.get("DATABASE_URL"):
+        raise ValueError("DATABASE_URL is not set!")
 
     app = Application.builder().token(BOT_TOKEN).build()
 

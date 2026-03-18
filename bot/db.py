@@ -1,13 +1,26 @@
 import os
+import time
+import logging
 import psycopg2
 import psycopg2.extras
 from typing import Optional
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
+logger = logging.getLogger(__name__)
 
 
 def _conn():
-    return psycopg2.connect(DATABASE_URL)
+    last_err = None
+    for attempt in range(5):
+        try:
+            conn = psycopg2.connect(DATABASE_URL, connect_timeout=10)
+            return conn
+        except psycopg2.OperationalError as e:
+            last_err = e
+            wait = 2 ** attempt
+            logger.warning(f"DB connection failed (attempt {attempt+1}/5), retrying in {wait}s: {e}")
+            time.sleep(wait)
+    raise last_err
 
 
 def init_db():
