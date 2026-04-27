@@ -1,4 +1,5 @@
 import os
+import asyncio
 import logging
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -69,7 +70,7 @@ async def handle_new_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
     try:
-        result = dropmail.create_session()
+        result = await asyncio.to_thread(dropmail.create_session)
     except Exception as e:
         await update.message.reply_text(f"❌ បង្កើតមិនបានទេ: {e}", reply_markup=MAIN_KEYBOARD)
         return
@@ -81,27 +82,29 @@ async def handle_new_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    upsert_session(
-        telegram_user_id=user.id,
-        telegram_username=user.username,
-        telegram_first_name=user.first_name,
-        dropmail_session_id=result["session_id"],
-        email_address=result["email"],
-        address_id=result["address_id"],
-        restore_key=result["restore_key"],
-    )
-    add_email_to_history(user.id, result["email"],
-                         dropmail_session_id=result["session_id"],
-                         address_id=result["address_id"],
-                         restore_key=result["restore_key"])
+    def _persist():
+        upsert_session(
+            telegram_user_id=user.id,
+            telegram_username=user.username,
+            telegram_first_name=user.first_name,
+            dropmail_session_id=result["session_id"],
+            email_address=result["email"],
+            address_id=result["address_id"],
+            restore_key=result["restore_key"],
+        )
+        add_email_to_history(user.id, result["email"],
+                             dropmail_session_id=result["session_id"],
+                             address_id=result["address_id"],
+                             restore_key=result["restore_key"])
 
+    await asyncio.to_thread(_persist)
     await update.message.reply_text(f"<code>{result['email']}</code>", parse_mode="HTML")
 
 
 # ── 📋 My Email ───────────────────────────────────────────────────────────────
 async def handle_my_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    session = get_session(user.id)
+    session = await asyncio.to_thread(get_session, user.id)
 
     if not session or not session.get("is_active") or not session.get("email_address"):
         await update.message.reply_text(
@@ -125,7 +128,7 @@ async def handle_my_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ── 📓 List — show all emails ever created ───────────────────────────────────
 async def handle_inbox(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user    = update.effective_user
-    history = get_email_history(user.id)
+    history = await asyncio.to_thread(get_email_history, user.id)
 
     if not history:
         await update.message.reply_text(
@@ -142,7 +145,7 @@ async def handle_inbox(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ── 🗑️ Delete — show email picker ─────────────────────────────────────────────
 async def handle_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user    = update.effective_user
-    entries = get_user_history_entries(user.id)
+    entries = await asyncio.to_thread(get_user_history_entries, user.id)
 
     if not entries:
         await update.message.reply_text(
@@ -165,7 +168,7 @@ async def handle_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── 📊 Statistics ─────────────────────────────────────────────────────────────
 async def handle_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    s = get_stats()
+    s = await asyncio.to_thread(get_stats)
     text = (
         "📊 <b>ស្ថិតិ Bot</b>\n\n"
         f"👥 អ្នកប្រើប្រាស់សរុប: <b>{s['total_users']}</b>\n"
@@ -177,7 +180,7 @@ async def handle_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── Show Inbox (shared helper) ────────────────────────────────────────────────
 async def _show_inbox(user_id: int, reply_to=None, callback_query=None):
-    session = get_session(user_id)
+    session = await asyncio.to_thread(get_session, user_id)
 
     if not session or not session.get("is_active") or not session.get("dropmail_session_id"):
         text = (
@@ -191,7 +194,9 @@ async def _show_inbox(user_id: int, reply_to=None, callback_query=None):
         return
 
     try:
-        mails = dropmail.get_new_mails(session["dropmail_session_id"], after_mail_id=None)
+        mails = await asyncio.to_thread(
+            dropmail.get_new_mails, session["dropmail_session_id"], None
+        )
     except Exception as e:
         text = f"❌ កំហុសក្នុងការពិនិត្យ: {e}"
         if callback_query:
@@ -259,34 +264,38 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "new_email":
         try:
-            result = dropmail.create_session()
+            result = await asyncio.to_thread(dropmail.create_session)
         except Exception as e:
             await query.edit_message_text(f"❌ បង្កើតមិនបានទេ: {e}")
             return
         if not result:
             await query.edit_message_text("❌ មិនអាចបង្កើត session បានទេ។ សូមព្យាយាមម្ដងទៀត។")
             return
-        upsert_session(
-            telegram_user_id=user.id,
-            telegram_username=user.username,
-            telegram_first_name=user.first_name,
-            dropmail_session_id=result["session_id"],
-            email_address=result["email"],
-            address_id=result["address_id"],
-            restore_key=result["restore_key"],
-        )
-        add_email_to_history(user.id, result["email"],
-                             dropmail_session_id=result["session_id"],
-                             address_id=result["address_id"],
-                             restore_key=result["restore_key"])
+
+        def _persist():
+            upsert_session(
+                telegram_user_id=user.id,
+                telegram_username=user.username,
+                telegram_first_name=user.first_name,
+                dropmail_session_id=result["session_id"],
+                email_address=result["email"],
+                address_id=result["address_id"],
+                restore_key=result["restore_key"],
+            )
+            add_email_to_history(user.id, result["email"],
+                                 dropmail_session_id=result["session_id"],
+                                 address_id=result["address_id"],
+                                 restore_key=result["restore_key"])
+
+        await asyncio.to_thread(_persist)
         await query.edit_message_text(f"<code>{result['email']}</code>", parse_mode="HTML")
 
     elif query.data == "delete_email":
-        session = get_session(user.id)
+        session = await asyncio.to_thread(get_session, user.id)
         address_id = session.get("address_id") if session else None
         if address_id:
-            dropmail.delete_address(address_id)
-        deactivate_session(user.id)
+            await asyncio.to_thread(dropmail.delete_address, address_id)
+        await asyncio.to_thread(deactivate_session, user.id)
         await query.edit_message_text(
             "🗑 <b>អ៊ីម៉ែលត្រូវបានលុបចោលហើយ។</b>\n\n"
             "ចុច <b>📧 អ៊ីម៉ែលថ្មី</b> ដើម្បីបង្កើតថ្មី។",
@@ -295,16 +304,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data.startswith("del_email:"):
         email_to_delete = query.data[len("del_email:"):]
-        entry = get_history_entry_by_email(user.id, email_to_delete)
+        entry = await asyncio.to_thread(get_history_entry_by_email, user.id, email_to_delete)
         if not entry:
             await query.edit_message_text(f"❌ រកមិនឃើញ <code>{email_to_delete}</code>", parse_mode="HTML")
             return
         if entry.get("address_id"):
-            dropmail.delete_address(entry["address_id"])
-        remove_email_from_history(entry["id"])
-        session = get_session(user.id)
+            await asyncio.to_thread(dropmail.delete_address, entry["address_id"])
+        await asyncio.to_thread(remove_email_from_history, entry["id"])
+        session = await asyncio.to_thread(get_session, user.id)
         if session and session.get("email_address") == email_to_delete:
-            deactivate_session(user.id)
+            await asyncio.to_thread(deactivate_session, user.id)
         await query.edit_message_text(
             f"🗑 លុប <code>{email_to_delete}</code> បានសម្រេច។",
             parse_mode="HTML"
@@ -312,43 +321,44 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ── Background email polling — keeps EVERY history email alive ────────────────
-async def poll_emails(context: ContextTypes.DEFAULT_TYPE):
-    entries = get_all_history_entries()
+async def _poll_one(entry: dict, context: ContextTypes.DEFAULT_TYPE):
+    history_id    = entry["id"]
+    user_id       = entry["telegram_user_id"]
+    session_id    = entry["dropmail_session_id"]
+    email_address = entry["email_address"]
+    restore_key   = entry["restore_key"]
+    last_mail_id  = entry.get("last_mail_id")
 
-    for entry in entries:
-        history_id    = entry["id"]
-        user_id       = entry["telegram_user_id"]
-        session_id    = entry["dropmail_session_id"]
-        email_address = entry["email_address"]
-        restore_key   = entry["restore_key"]
-        last_mail_id  = entry.get("last_mail_id")
+    if not session_id:
+        return
 
-        if not session_id:
-            continue
+    try:
+        mails = await asyncio.to_thread(
+            dropmail.get_new_mails, session_id, last_mail_id
+        )
+    except Exception as e:
+        logger.warning(f"Poll error [{email_address}]: {e}")
+        return
 
+    # ── Auto-restore silently when session expires ────────────────────────
+    if mails is None:
+        logger.info(f"Restoring [{email_address}] for user {user_id}...")
         try:
-            mails = dropmail.get_new_mails(session_id, after_mail_id=last_mail_id)
+            restored = await asyncio.to_thread(
+                dropmail.restore_session, email_address, restore_key
+            )
         except Exception as e:
-            logger.warning(f"Poll error [{email_address}]: {e}")
-            continue
+            logger.warning(f"Restore failed [{email_address}]: {e}")
+            return
 
-        # ── Auto-restore silently when session expires ────────────────────────
-        if mails is None:
-            logger.info(f"Restoring [{email_address}] for user {user_id}...")
-            try:
-                restored = dropmail.restore_session(email_address, restore_key)
-            except Exception as e:
-                logger.warning(f"Restore failed [{email_address}]: {e}")
-                continue
-
-            if restored:
+        if restored:
+            def _persist_restore():
                 update_history_session(
                     history_id,
                     new_session_id=restored["session_id"],
                     new_address_id=restored.get("address_id"),
                     new_restore_key=restored.get("restore_key"),
                 )
-                # Also sync bot_sessions if this is the user's current email
                 cur_sess = get_session(user_id)
                 if cur_sess and cur_sess.get("email_address") == email_address:
                     update_session_after_restore(
@@ -357,81 +367,91 @@ async def poll_emails(context: ContextTypes.DEFAULT_TYPE):
                         new_address_id=restored.get("address_id"),
                         new_restore_key=restored.get("restore_key"),
                     )
-                logger.info(f"Restored [{email_address}] → new session {restored['session_id']}")
+            await asyncio.to_thread(_persist_restore)
+            logger.info(f"Restored [{email_address}] → new session {restored['session_id']}")
+        return
+
+    # ── Forward new emails ────────────────────────────────────────────────
+    if not mails:
+        return
+
+    newest_id = None
+    for mail in mails:
+        mail_id = mail.get("id")
+        if last_mail_id and mail_id == last_mail_id:
             continue
 
-        # ── Forward new emails ────────────────────────────────────────────────
-        if not mails:
-            continue
+        subject   = mail.get("headerSubject") or "(គ្មានប្រធានបទ)"
+        from_addr = mail.get("fromAddr") or "unknown"
+        to_addr   = mail.get("toAddr") or email_address
+        body      = (mail.get("text") or "").strip()
+        preview   = body[:800] + "\n…" if len(body) > 800 else body
 
-        newest_id = None
-        for mail in mails:
-            mail_id = mail.get("id")
-            if last_mail_id and mail_id == last_mail_id:
-                continue
+        text = (
+            f"📬 <b>អ៊ីម៉ែលថ្មីចូលមកដល់!</b>\n\n"
+            f"📧 ទៅ: <code>{to_addr}</code>\n"
+            f"👤 ពី: <code>{from_addr}</code>\n"
+            f"📝 ប្រធានបទ: <b>{subject}</b>\n\n"
+            f"{'─' * 28}\n"
+            f"{preview if preview else '<i>(ទទេ)</i>'}"
+        )
 
-            subject   = mail.get("headerSubject") or "(គ្មានប្រធានបទ)"
-            from_addr = mail.get("fromAddr") or "unknown"
-            to_addr   = mail.get("toAddr") or email_address
-            body      = (mail.get("text") or "").strip()
-            preview   = body[:800] + "\n…" if len(body) > 800 else body
-
-            text = (
-                f"📬 <b>អ៊ីម៉ែលថ្មីចូលមកដល់!</b>\n\n"
-                f"📧 ទៅ: <code>{to_addr}</code>\n"
-                f"👤 ពី: <code>{from_addr}</code>\n"
-                f"📝 ប្រធានបទ: <b>{subject}</b>\n\n"
-                f"{'─' * 28}\n"
-                f"{preview if preview else '<i>(ទទេ)</i>'}"
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=text,
+                parse_mode="HTML"
             )
+            await asyncio.to_thread(log_mail, user_id, from_addr, to_addr, subject, body)
+        except Exception as e:
+            logger.warning(f"Failed to notify user {user_id}: {e}")
 
+        if TARGET_CHANNEL_ID and TARGET_CHANNEL_ID != user_id:
             try:
                 await context.bot.send_message(
-                    chat_id=user_id,
+                    chat_id=TARGET_CHANNEL_ID,
                     text=text,
                     parse_mode="HTML"
                 )
-                log_mail(user_id, from_addr, to_addr, subject, body)
             except Exception as e:
-                logger.warning(f"Failed to notify user {user_id}: {e}")
+                logger.warning(f"Failed to forward to channel {TARGET_CHANNEL_ID}: {e}")
 
-            # ── Also forward to target channel ────────────────────────────
-            if TARGET_CHANNEL_ID and TARGET_CHANNEL_ID != user_id:
-                try:
-                    await context.bot.send_message(
-                        chat_id=TARGET_CHANNEL_ID,
-                        text=text,
-                        parse_mode="HTML"
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to forward to channel {TARGET_CHANNEL_ID}: {e}")
+        newest_id = mail_id
 
-            newest_id = mail_id
+    if newest_id:
+        await asyncio.to_thread(update_history_last_mail_id, history_id, newest_id)
 
-        if newest_id:
-            update_history_last_mail_id(history_id, newest_id)
+
+async def poll_emails(context: ContextTypes.DEFAULT_TYPE):
+    entries = await asyncio.to_thread(get_all_history_entries)
+    if not entries:
+        return
+    await asyncio.gather(
+        *[_poll_one(entry, context) for entry in entries],
+        return_exceptions=True,
+    )
 
 
 # ── Proactive restore — keeps ALL history emails active every 10 min ──────────
-async def proactive_restore_all(context: ContextTypes.DEFAULT_TYPE):
-    """Every 10 minutes, restore every session in email_history so all emails stay active."""
-    entries = get_all_history_entries()
-    for entry in entries:
-        history_id    = entry["id"]
-        user_id       = entry["telegram_user_id"]
-        email_address = entry["email_address"]
-        restore_key   = entry["restore_key"]
+async def _restore_one(entry: dict):
+    history_id    = entry["id"]
+    user_id       = entry["telegram_user_id"]
+    email_address = entry["email_address"]
+    restore_key   = entry["restore_key"]
 
-        if not restore_key:
-            continue
+    if not restore_key:
+        return
 
-        try:
-            restored = dropmail.restore_session(email_address, restore_key)
-        except Exception as e:
-            logger.warning(f"Proactive restore failed [{email_address}]: {e}")
-            continue
+    try:
+        restored = await asyncio.to_thread(
+            dropmail.restore_session, email_address, restore_key
+        )
+    except Exception as e:
+        logger.warning(f"Proactive restore failed [{email_address}]: {e}")
+        return
 
-        if restored:
+    if restored:
+        def _persist():
             update_history_session(
                 history_id,
                 new_session_id=restored["session_id"],
@@ -446,7 +466,19 @@ async def proactive_restore_all(context: ContextTypes.DEFAULT_TYPE):
                     new_address_id=restored.get("address_id"),
                     new_restore_key=restored.get("restore_key"),
                 )
-            logger.info(f"Proactively restored [{email_address}] → session {restored['session_id']}")
+        await asyncio.to_thread(_persist)
+        logger.info(f"Proactively restored [{email_address}] → session {restored['session_id']}")
+
+
+async def proactive_restore_all(context: ContextTypes.DEFAULT_TYPE):
+    """Every 10 minutes, restore every session in email_history so all emails stay active."""
+    entries = await asyncio.to_thread(get_all_history_entries)
+    if not entries:
+        return
+    await asyncio.gather(
+        *[_restore_one(entry) for entry in entries],
+        return_exceptions=True,
+    )
 
 
 # ── Bot entry point ───────────────────────────────────────────────────────────
