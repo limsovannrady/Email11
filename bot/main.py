@@ -26,7 +26,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BOT_TOKEN    = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-POLL_INTERVAL    = 15
+POLL_INTERVAL    = 3
 RESTORE_INTERVAL = 600  # 10 minutes
 
 ADMIN_ID          = int(os.environ.get("ADMIN_ID", 5002402843))
