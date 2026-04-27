@@ -47,3 +47,4 @@ args = "cd bot && python3 main.py"
 [userenv]
 
 [userenv.shared]
+NEON_DATABASE_URL = "postgresql://neondb_owner:npg_CUg3fWZNM9rc@ep-ancient-feather-a16d9z6v-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"

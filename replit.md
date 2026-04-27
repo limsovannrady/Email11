@@ -7,7 +7,7 @@ A Python Telegram bot that creates disposable email addresses using the dropmail
 - **Language**: Python 3.11
 - **Bot Framework**: python-telegram-bot v22 (async, with job-queue for polling)
 - **Email API**: dropmail.me GraphQL API
-- **Storage**: PostgreSQL (Replit built-in database)
+- **Storage**: PostgreSQL on Neon (persistent — sessions, history, mail log)
 
 ## Project Structure
 
@@ -26,6 +26,7 @@ requirements.txt— Python dependencies (2 packages only)
 |----------|-------------|
 | `TELEGRAM_BOT_TOKEN` | From @BotFather on Telegram |
 | `DROPMAIL_API_TOKEN` | Free `af_...` token from https://dropmail.me/api/ |
+| `NEON_DATABASE_URL`  | Neon Postgres connection string (sslmode=require) |
 
 ## Background Jobs
 
@@ -51,10 +52,14 @@ requirements.txt— Python dependencies (2 packages only)
 - **Command**: `python bot/main.py`
 - **No port, no database**
 
-## Note on In-Memory Storage
+## Storage
 
-All session data is stored in RAM. Data resets when the bot restarts.
-This is intentional — temporary emails don't need persistence.
+All sessions, email history, and forwarded mail are stored in Neon Postgres.
+Data persists across restarts and redeploys.
+
+On first startup, if a legacy `bot/data.json` file is present and the DB tables
+are empty, the contents are imported automatically and the file is renamed to
+`bot/data.json.migrated`.
 
 ## Running on Replit
 
