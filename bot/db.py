@@ -386,26 +386,6 @@ def get_session(telegram_user_id: int) -> Optional[dict]:
         return dict(row) if row else None
 
 
-def get_all_active_sessions() -> list:
-    with _cursor() as cur:
-        cur.execute(
-            """
-            SELECT * FROM bot_sessions
-             WHERE is_active = TRUE
-               AND dropmail_session_id IS NOT NULL
-            """
-        )
-        return [dict(r) for r in cur.fetchall()]
-
-
-def update_last_mail_id(telegram_user_id: int, mail_id: str):
-    with _cursor(commit=True) as cur:
-        cur.execute(
-            "UPDATE bot_sessions SET last_mail_id = %s WHERE telegram_user_id = %s",
-            (mail_id, telegram_user_id),
-        )
-
-
 def update_session_after_restore(telegram_user_id: int,
                                  new_session_id: str,
                                  new_address_id: Optional[str],

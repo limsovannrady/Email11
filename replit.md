@@ -15,9 +15,8 @@ A Python Telegram bot that creates disposable email addresses using the dropmail
 bot/
   main.py       — Main bot logic, commands, handlers, polling jobs
   dropmail.py   — DropMail GraphQL API client
-  db.py         — In-memory storage (sessions, history, mail log)
-Dockerfile      — Docker image for Render deployment
-requirements.txt— Python dependencies (2 packages only)
+  db.py         — Postgres storage (sessions, history, mail log)
+requirements.txt— Python dependencies
 ```
 
 ## Environment Variables Required
@@ -32,25 +31,8 @@ requirements.txt— Python dependencies (2 packages only)
 
 | Job | Interval | Purpose |
 |-----|----------|---------|
-| `poll_emails` | Every 15 seconds | Check and forward new emails to users |
+| `poll_emails` | Every 3 seconds  | Check and forward new emails to users |
 | `proactive_restore_all` | Every 10 minutes | Restore ALL sessions to keep emails active |
-
-## Deploying to Render
-
-### Service Type: **Background Worker**
-
-1. Push this repo to GitHub
-2. Render → **New Background Worker** → **Docker**
-3. Set environment variables:
-   - `TELEGRAM_BOT_TOKEN`
-   - `DROPMAIL_API_TOKEN`
-4. Deploy
-
-### Docker Details
-
-- **Base image**: `python:3.11-slim`
-- **Command**: `python bot/main.py`
-- **No port, no database**
 
 ## Storage
 

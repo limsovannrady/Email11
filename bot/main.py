@@ -11,8 +11,8 @@ from telegram.ext import (
     filters,
 )
 from db import (
-    init_db, upsert_session, get_session, get_all_active_sessions,
-    update_last_mail_id, update_session_after_restore, deactivate_session,
+    init_db, upsert_session, get_session,
+    update_session_after_restore, deactivate_session,
     log_mail, get_stats, add_email_to_history, get_email_history,
     get_all_history_entries, update_history_session, update_history_last_mail_id,
     get_history_entry_by_email, get_user_history_entries, remove_email_from_history,
