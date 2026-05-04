@@ -11,17 +11,25 @@ from psycopg2.pool import ThreadedConnectionPool
 
 logger = logging.getLogger(__name__)
 
-DATABASE_URL = (
-    os.environ.get("NEON_DATABASE_URL")
-    or os.environ.get("DATABASE_URL")
-    or ""
-)
-
-if not DATABASE_URL:
-    raise RuntimeError(
-        "NEON_DATABASE_URL (or DATABASE_URL) is not set. "
-        "Cannot start without a Postgres connection string."
+def _build_db_url() -> str:
+    url = (
+        os.environ.get("NEON_DATABASE_URL")
+        or os.environ.get("DATABASE_URL")
+        or ""
     )
+    if not url:
+        raise RuntimeError(
+            "NEON_DATABASE_URL (or DATABASE_URL) is not set. "
+            "Cannot start without a Postgres connection string."
+        )
+    # psycopg2 < 2.9.9 does not understand channel_binding — strip it safely
+    import re
+    url = re.sub(r"[&?]channel_binding=[^&]*", "", url)
+    url = re.sub(r"\?&", "?", url)
+    url = url.rstrip("?")
+    return url
+
+DATABASE_URL = _build_db_url()
 
 _pool: Optional[ThreadedConnectionPool] = None
 

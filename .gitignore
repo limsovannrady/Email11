@@ -1,7 +1,18 @@
-node_modules
-dist
-.DS_Store
-server/public
-vite.config.ts.*
-*.tar.gz
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pythonlibs/
+*.egg-info/
+.env
+
+# Bot data
 bot/data.json
+bot/data.json.migrated
+
+# macOS
+.DS_Store
+
+# Node (not used, safety net)
+node_modules/
+dist/
